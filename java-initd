@@ -27,10 +27,6 @@ fail() {
 	exit $2
 }
 
-pids() {
-	fuser /tmp/test.pid 2>/dev/null | sed 's, *,,'
-}
-
 clean_lock() {
 	[[ -w "$INITD_LOCK" ]] && rm -f "$INITD_LOCK"
 }
@@ -66,7 +62,6 @@ release_pid_lock() {
 	exec 201<&-
 }
 
-
 run_as() {
 	local RUN_USER="$1"
 	local COMMAND="$2"
@@ -91,6 +86,15 @@ daemonize() {
 	run_as "$RUN_USER" "setsid bash -c '( $COMMAND ) 0<&- 200<&- 1>>\"$LOG_FILE\" 2>&1 & eval \"echo \$! > '$PID_FILE'\"'"
 }
 
+pids() {
+	run_as "$RUN_USER" "fuser /tmp/test.pid 2>/dev/null | sed 's, *,,'"
+}
+
+pids_send_signal() {
+	local SIGNAL="$1"
+	run_as "$RUN_USER" "fuser /tmp/test.pid -s -k -$SIGNAL"
+}
+
 start() {
 	[[ "$WORKING_DIRECTORY" ]] || error "working directory not defined" 2
 	[[ -d "$WORKING_DIRECTORY" ]] || error "working directory '$WORKING_DIRECTORY' not a directory" 2
@@ -100,11 +104,39 @@ start() {
 	[[ "$LOG_FILE" ]] || error "log file not defined" 2
 
 	# Note that the fd 201 of the pid file lock will be inherited by the daemon
-	aquire_pid_lock || fail "daemon already running (pid: `pids`)" 4
+	aquire_pid_lock || ok "$INITD_NAME already running (pids: `pids`)"
 	daemonize "$RUN_USER" "$START_COMMAND" "$LOG_FILE" "$PID_FILE"
 	release_pid_lock
 
-	ok "$INITD_NAME runnig (pid: `pids`)"
+	ok "$INITD_NAME runnig (pids: `pids`)"
+}
+
+wait_while_pids() {
+	local SECONDS="$1"
+	while [[ `pids` && $(( SECONDS-- )) != 0 ]]; do
+		sleep 1
+		echo -n '.'
+	done
+	[[ $SECONDS == -1 ]] && return 1
+	return 0
+}
+
+stop() {
+	[[ "$STOP_WAIT" ]] || error "stop wait time not defined" 2
+	[[ "$ALLOW_KILL" ]] || error "allow kill not defined" 2
+
+	[[ `pids` ]] || ok "$INITD_NAME already stopped"
+	echo -n "stopping $INITD_NAME..."
+
+	pids_send_signal TERM
+	wait_while_pids "$STOP_WAIT" && ok " terminated"
+
+	if $ALLOW_KILL; then
+		pids_send_signal KILL
+		wait_while_pids "$STOP_WAIT" && ok " killed"
+	fi
+
+	fail " will not stop!" 5
 }
 
 # Source RedHat startup functions
@@ -139,6 +171,7 @@ case "$1" in
 	;;
 	stop)
 		need_initd_lock
+		stop
 	;;
 	restart)
 		need_initd_lock

@@ -3,4 +3,6 @@ PID_FILE="/tmp/test.pid"
 START_COMMAND="`pwd`/test/start.sh"
 RUN_USER="kazuya"
 LOG_FILE="/tmp/test.log"
+STOP_WAIT=2
+ALLOW_KILL=true
 
