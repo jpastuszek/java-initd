@@ -65,7 +65,7 @@ lock_initd() {
 need_initd_lock() {
 	lock_initd || error "script already running" 2
 	# clean_lock on termination
-	trap "clean_lock" 0 1 2 3 6 9 14 15
+	trap 'clean_lock' 0 1 2 3 6 9 14 15
 }
 
 close_fds() {
@@ -121,7 +121,7 @@ pid() {
 
 pids_send_signal() {
 	local SIGNAL="$1"
-	run_as "$RUN_USER" "fuser '$PID_FILE' -s -k -$SIGNAL"
+	run_as "$RUN_USER" "fuser '$PID_FILE' -s -k -$SIGNAL 2>/dev/null"
 }
 
 start() {
@@ -145,6 +145,12 @@ wait_while_pids() {
 	return 0
 }
 
+wait_pid_lock() {
+	local SECONDS="$1"
+	[[ -f "$PID_FILE" ]] || return 0
+	flock -w "$SECONDS" "$PID_FILE" true
+}
+
 stop() {
 	[[ `pids` ]] || ok "$APPLICATION_NAME already stopped"
 	echo -n "stopping $APPLICATION_NAME ."
@@ -156,11 +162,11 @@ stop() {
 	fi
 
 	pids_send_signal TERM
-	wait_while_pids "$STOP_WAIT" && ok " terminated"
+	wait_while_pids "$STOP_WAIT" && wait_pid_lock 2 && ok " terminated"
 
 	if $ALLOW_KILL; then
 		pids_send_signal KILL
-		wait_while_pids "$STOP_WAIT" && ok " killed"
+		wait_while_pids "$STOP_WAIT" && wait_pid_lock 2 && ok " killed"
 	fi
 
 	fail " will not stop!" 5
@@ -212,6 +218,8 @@ case "$1" in
 	;;
 	restart)
 		need_initd_lock
+		trap 'start' EXIT
+		stop
 	;;
 	status)
 		PIDS=`pids`
