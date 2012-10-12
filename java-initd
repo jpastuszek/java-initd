@@ -128,6 +128,11 @@ stop() {
 	[[ `pids` ]] || ok "$INITD_NAME already stopped"
 	echo -n "stopping $INITD_NAME..."
 
+	if [[ "$STOP_COMMAND" ]]; then
+		run_as "$RUN_USER" "$STOP_COMMAND"
+		wait_while_pids "$STOP_WAIT" && ok " stopped"
+	fi
+
 	pids_send_signal TERM
 	wait_while_pids "$STOP_WAIT" && ok " terminated"
 

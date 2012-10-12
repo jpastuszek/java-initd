@@ -1,5 +1,6 @@
 WORKING_DIRECTORY="/tmp"
 PID_FILE="/tmp/test.pid"
+STOP_COMMAND="killall start.sh"
 START_COMMAND="`pwd`/test/start.sh"
 RUN_USER="kazuya"
 LOG_FILE="/tmp/test.log"
