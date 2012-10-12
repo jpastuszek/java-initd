@@ -223,6 +223,11 @@ case "$1" in
 			exit 1
 		fi
 	;;
+	threaddump)
+		PID=`pid`
+		[[ "$PID" ]] || fail "$APPLICATION_NAME is stopped"
+		run_as "$RUN_USER" "kill -SIGQUIT '$PID'"
+	;;
 	*)
 		echo "Usage: $INITD_NAME (start|stop|restart|status|threaddump)"
 	;;
