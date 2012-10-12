@@ -227,6 +227,7 @@ case "$1" in
 		PID=`pid`
 		[[ "$PID" ]] || fail "$APPLICATION_NAME is stopped"
 		run_as "$RUN_USER" "kill -SIGQUIT '$PID'"
+		ok "SIGQUIT sent to $PID, see $LOG_FILE"
 	;;
 	*)
 		echo "Usage: $INITD_NAME (start|stop|restart|status|threaddump)"
