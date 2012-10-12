@@ -6,4 +6,5 @@ RUN_USER="kazuya"
 LOG_FILE="/tmp/test.log"
 STOP_WAIT=2
 ALLOW_KILL=true
+APPLICATION_NAME="hello world"
 

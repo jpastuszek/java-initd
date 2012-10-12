@@ -96,19 +96,14 @@ pids_send_signal() {
 }
 
 start() {
-	[[ "$WORKING_DIRECTORY" ]] || error "working directory not defined" 2
-	[[ -d "$WORKING_DIRECTORY" ]] || error "working directory '$WORKING_DIRECTORY' not a directory" 2
 	cd "$WORKING_DIRECTORY"
 
-	[[ "$START_COMMAND" ]] || error "start command not defined" 2
-	[[ "$LOG_FILE" ]] || error "log file not defined" 2
-
 	# Note that the fd 201 of the pid file lock will be inherited by the daemon
-	aquire_pid_lock || ok "$INITD_NAME already running (pids: `pids`)"
+	aquire_pid_lock || ok "$APPLICATION_NAME already running (pids: `pids`)"
 	daemonize "$RUN_USER" "$START_COMMAND" "$LOG_FILE" "$PID_FILE"
 	release_pid_lock
 
-	ok "$INITD_NAME runnig (pids: `pids`)"
+	ok "$APPLICATION_NAME runnig (pids: `pids`)"
 }
 
 wait_while_pids() {
@@ -122,11 +117,8 @@ wait_while_pids() {
 }
 
 stop() {
-	[[ "$STOP_WAIT" ]] || error "stop wait time not defined" 2
-	[[ "$ALLOW_KILL" ]] || error "allow kill not defined" 2
-
-	[[ `pids` ]] || ok "$INITD_NAME already stopped"
-	echo -n "stopping $INITD_NAME..."
+	[[ `pids` ]] || ok "$APPLICATION_NAME already stopped"
+	echo -n "stopping $APPLICATION_NAME ."
 
 	if [[ "$STOP_COMMAND" ]]; then
 		run_as "$RUN_USER" "$STOP_COMMAND"
@@ -144,31 +136,41 @@ stop() {
 	fail " will not stop!" 5
 }
 
-# Source RedHat startup functions
-if [ -x /etc/rc.d/init.d/functions ]; then
-	  . /etc/rc.d/init.d/functions
-fi
+# source RedHat startup functions
+[[ -x "/etc/rc.d/init.d/functions" ]] && . "/etc/rc.d/init.d/functions"
 
 ## Init variables
+# source Java conf (JAVA_HOME)
+[[ -r "/etc/java/java.conf" ]] && . "/etc/java/java.conf"
+export JAVA_HOME
+
+# name of this script
 INITD_NAME="`basename $0 | tr ' ' '_'`"
 
-# The name of managed application
-if [ -z "$APPLICATION_NAME" ]; then
-	APPLICATION_NAME="$INITD_NAME"
-fi
+# the name of managed application
+[[ "$APPLICATION_NAME" ]] || APPLICATION_NAME="$INITD_NAME"
 
+# lock file for this script
 INITD_LOCK="/tmp/java-init-$INITD_NAME.LOCK"
 
-if [ -e "test/sysconfig" ]; then
-	. test/sysconfig
-fi
+# source test sysconfig if we are testing
+[[ -r "test/sysconfig" ]] && . "test/sysconfig"
 
-## Prepare variables and env
-close_fds
+# source sysconfig variables
+[[ -r "/etc/sysconfig/$INITD_NAME" ]] && . "/etc/sysconfig/$INITD_NAME"
 
+## Verify variables
+[[ "$WORKING_DIRECTORY" ]] || error "working directory not defined" 2
+[[ -d "$WORKING_DIRECTORY" ]] || error "working directory '$WORKING_DIRECTORY' not a directory" 2
+[[ "$START_COMMAND" ]] || error "start command not defined" 2
+[[ "$LOG_FILE" ]] || error "log file not defined" 2
+[[ "$STOP_WAIT" ]] || error "stop wait time not defined" 2
+[[ "$ALLOW_KILL" ]] || error "allow kill not defined" 2
 [[ "$PID_FILE" ]] || error "pid file not defined" 2
 
 ## Execute operation
+close_fds
+
 case "$1" in
 	start)
 		need_initd_lock
@@ -184,10 +186,10 @@ case "$1" in
 	status)
 		PIDS=`pids`
 		if [[ "$PIDS" ]]; then
-			echo "$INITD_NAME is running (pids: $PIDS)"
+			echo "$APPLICATION_NAME is running (pids: $PIDS)"
 			exit 0
 		else
-			echo "$INITD_NAME is stopped"
+			echo "$APPLICATION_NAME is stopped"
 			exit 1
 		fi
 	;;
