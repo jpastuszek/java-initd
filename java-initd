@@ -1,5 +1,30 @@
 #!/bin/bash
 
+###
+#
+# Spawns process in own session as specified user (daemonize).
+#
+# Stopping will be done in up to three fazes:
+#  1. Use STOP_COMMAND if defined than wait for STOP_WAIT until process exits
+#  2. Send SIGTERM and wait for STOP_WAIT until process exits
+#  3. Send SIGKILL if allowed by ALLOW_KILL and wait for STOP_WAIT until process exits
+#
+# Note that stop process will send signals to all processes that start process has spawned.
+# Note that locking mechanism is based on file locking (flock).
+#
+# Following variables needs to be defined in sysconfig:
+#
+# APPLICATION_NAME		name of the application for display purposes (optional)
+# WORKING_DIRECTORY		directory to change into before executing start/stop
+# PID_FILE				file where pid will be stored
+# LOG_FILE				file to redirect process output to
+# RUN_USER				user that will be used to run start/stop/status commands
+# START_COMMAND			command used to start the process
+# STOP_COMMAND			command used to stop the process; %PID substring will be replaced with process PID (optional)
+# STOP_WAIT				time in seconds to wait for stop command effect
+# ALLOW_KILL			if true SIGKILL may be sent to process if it refuses to stop
+#
+
 ## Functions
 
 error() {
@@ -32,7 +57,7 @@ clean_lock() {
 }
 
 lock_initd() {
-	[[ -f "$INITD_LOCK" ]] || touch "$INITD_LOCK" || error "connot touch init script lock file '$INITD_LOCK'" 2
+	[[ -f "$INITD_LOCK" ]] || touch "$INITD_LOCK" || error "cannot touch init script lock file '$INITD_LOCK'" 2
 	exec 200>>"$INITD_LOCK"
 	flock -n 200
 }
@@ -50,7 +75,7 @@ close_fds() {
 }
 
 aquire_pid_lock() {
-	[[ -f "$PID_FILE" ]] || touch "$PID_FILE" || error "connot touch pid file '$PID_FILE'" 2
+	[[ -f "$PID_FILE" ]] || touch "$PID_FILE" || error "cannot touch pid file '$PID_FILE'" 2
 	exec 201>>"$PID_FILE"
 	flock -n 201
 	RET=$?
@@ -103,11 +128,11 @@ start() {
 	cd "$WORKING_DIRECTORY"
 
 	# Note that the fd 201 of the pid file lock will be inherited by the daemon
-	aquire_pid_lock || ok "$APPLICATION_NAME already running (pids: `pids`)"
+	aquire_pid_lock || ok "$APPLICATION_NAME already running (PIDs: `pids`)"
 	daemonize "$RUN_USER" "$START_COMMAND" "$LOG_FILE" "$PID_FILE"
 	release_pid_lock
 
-	ok "$APPLICATION_NAME runnig (pids: `pids`)"
+	ok "$APPLICATION_NAME running (PIDs: `pids`)"
 }
 
 wait_while_pids() {
@@ -125,6 +150,7 @@ stop() {
 	echo -n "stopping $APPLICATION_NAME ."
 
 	if [[ "$STOP_COMMAND" ]]; then
+		cd "$WORKING_DIRECTORY"
 		run_as "$RUN_USER" "${STOP_COMMAND//\%PID/`pid`}"
 		wait_while_pids "$STOP_WAIT" && ok " stopped"
 	fi
@@ -170,7 +196,7 @@ INITD_LOCK="/tmp/java-init-$INITD_NAME.LOCK"
 [[ "$LOG_FILE" ]] || error "log file not defined" 2
 [[ "$STOP_WAIT" ]] || error "stop wait time not defined" 2
 [[ "$ALLOW_KILL" ]] || error "allow kill not defined" 2
-[[ "$PID_FILE" ]] || error "pid file not defined" 2
+[[ "$PID_FILE" ]] || error "PID file not defined" 2
 
 ## Execute operation
 close_fds
@@ -190,7 +216,7 @@ case "$1" in
 	status)
 		PIDS=`pids`
 		if [[ "$PIDS" ]]; then
-			echo "$APPLICATION_NAME is running (pids: $PIDS)"
+			echo "$APPLICATION_NAME is running (PIDs: $PIDS)"
 			exit 0
 		else
 			echo "$APPLICATION_NAME is stopped"
