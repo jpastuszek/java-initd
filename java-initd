@@ -90,6 +90,10 @@ pids() {
 	run_as "$RUN_USER" "fuser /tmp/test.pid 2>/dev/null | sed 's, *,,'"
 }
 
+pid() {
+	pids | cut -d ' ' -f 1
+}
+
 pids_send_signal() {
 	local SIGNAL="$1"
 	run_as "$RUN_USER" "fuser /tmp/test.pid -s -k -$SIGNAL"
@@ -121,7 +125,7 @@ stop() {
 	echo -n "stopping $APPLICATION_NAME ."
 
 	if [[ "$STOP_COMMAND" ]]; then
-		run_as "$RUN_USER" "$STOP_COMMAND"
+		run_as "$RUN_USER" "${STOP_COMMAND//\%PID/`pid`}"
 		wait_while_pids "$STOP_WAIT" && ok " stopped"
 	fi
 
