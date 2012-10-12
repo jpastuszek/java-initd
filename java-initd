@@ -33,7 +33,7 @@ error() {
 }
 
 ok() {
-	if [ -x /etc/rc.d/init.d/functions ]; then
+	if [ -r /etc/rc.d/init.d/functions ]; then
 		echo_success
 		echo $1
 	else
@@ -43,7 +43,7 @@ ok() {
 }
 
 fail() {
-	if [ -x /etc/rc.d/init.d/functions ]; then
+	if [ -r /etc/rc.d/init.d/functions ]; then
 		echo_failure
 		echo $1
 	else
@@ -57,13 +57,13 @@ clean_lock() {
 }
 
 lock_initd() {
-	[[ -f "$INITD_LOCK" ]] || touch "$INITD_LOCK" || error "cannot touch init script lock file '$INITD_LOCK'" 2
+	[[ -f "$INITD_LOCK" ]] || touch "$INITD_LOCK" || error "Cannot touch init script lock file '$INITD_LOCK'" 2
 	exec 200>>"$INITD_LOCK"
 	flock -n 200
 }
 
 need_initd_lock() {
-	lock_initd || error "script already running" 2
+	lock_initd || error "Script already running" 2
 	# clean_lock on termination
 	trap 'clean_lock' 0 1 2 3 6 9 14 15
 }
@@ -75,7 +75,7 @@ close_fds() {
 }
 
 aquire_pid_lock() {
-	[[ -f "$PID_FILE" ]] || run_as "$RUN_USER" "touch '$PID_FILE'" || error "cannot touch pid file '$PID_FILE'" 2
+	[[ -f "$PID_FILE" ]] || run_as "$RUN_USER" "touch '$PID_FILE'" || error "Cannot touch PID file '$PID_FILE'" 2
 	exec 201>>"$PID_FILE"
 	flock -n 201
 	RET=$?
@@ -96,7 +96,7 @@ run_as() {
 		/bin/bash -l -c "$COMMAND"
 	else
 		COMPLETE_COMMAND="(${NOHUP}$COMPLETE_COMMAND')$STDOUT_REDIR"
-		[[ "$USER" == "root" ]] || error "cannot run command '$COMMAND' as user '$RUN_USER': need to be root" 99
+		[[ "$USER" == "root" ]] || error "Cannot run command '$COMMAND' as user '$RUN_USER': need to be root" 99
 		su - $RUN_USER -c "$COMMAND"
 	fi
 }
@@ -153,7 +153,7 @@ wait_pid_lock() {
 
 stop() {
 	[[ `pids` ]] || ok "$APPLICATION_NAME already stopped"
-	echo -n "stopping $APPLICATION_NAME ."
+	echo -n "Stopping $APPLICATION_NAME ."
 
 	if [[ "$STOP_COMMAND" ]]; then
 		cd "$WORKING_DIRECTORY"
@@ -173,7 +173,7 @@ stop() {
 }
 
 # source RedHat startup functions
-[[ -x "/etc/rc.d/init.d/functions" ]] && . "/etc/rc.d/init.d/functions"
+[[ -r "/etc/rc.d/init.d/functions" ]] && . "/etc/rc.d/init.d/functions"
 
 ## Init variables
 # source Java conf (JAVA_HOME)
@@ -196,12 +196,12 @@ INITD_LOCK="/tmp/java-init-$INITD_NAME.LOCK"
 [[ -r "/etc/sysconfig/$INITD_NAME" ]] && . "/etc/sysconfig/$INITD_NAME"
 
 ## Verify variables
-[[ "$WORKING_DIRECTORY" ]] || error "working directory not defined" 2
-[[ -d "$WORKING_DIRECTORY" ]] || error "working directory '$WORKING_DIRECTORY' not a directory" 2
-[[ "$START_COMMAND" ]] || error "start command not defined" 2
-[[ "$LOG_FILE" ]] || error "log file not defined" 2
-[[ "$STOP_WAIT" ]] || error "stop wait time not defined" 2
-[[ "$ALLOW_KILL" ]] || error "allow kill not defined" 2
+[[ "$WORKING_DIRECTORY" ]] || error "Working directory not defined" 2
+[[ -d "$WORKING_DIRECTORY" ]] || error "Working directory '$WORKING_DIRECTORY' not a directory" 2
+[[ "$START_COMMAND" ]] || error "Start command not defined" 2
+[[ "$LOG_FILE" ]] || error "Log file not defined" 2
+[[ "$STOP_WAIT" ]] || error "Stop wait time not defined" 2
+[[ "$ALLOW_KILL" ]] || error "Allow kill not defined" 2
 [[ "$PID_FILE" ]] || error "PID file not defined" 2
 
 ## Execute operation
