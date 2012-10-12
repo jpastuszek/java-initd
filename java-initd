@@ -75,7 +75,7 @@ close_fds() {
 }
 
 aquire_pid_lock() {
-	[[ -f "$PID_FILE" ]] || touch "$PID_FILE" || error "cannot touch pid file '$PID_FILE'" 2
+	[[ -f "$PID_FILE" ]] || run_as "$RUN_USER" "touch '$PID_FILE'" || error "cannot touch pid file '$PID_FILE'" 2
 	exec 201>>"$PID_FILE"
 	flock -n 201
 	RET=$?
@@ -112,7 +112,7 @@ daemonize() {
 }
 
 pids() {
-	run_as "$RUN_USER" "fuser /tmp/test.pid 2>/dev/null | sed 's, *,,'"
+	run_as "$RUN_USER" "fuser '$PID_FILE' 2>/dev/null | sed 's, *,,'"
 }
 
 pid() {
@@ -121,7 +121,7 @@ pid() {
 
 pids_send_signal() {
 	local SIGNAL="$1"
-	run_as "$RUN_USER" "fuser /tmp/test.pid -s -k -$SIGNAL"
+	run_as "$RUN_USER" "fuser '$PID_FILE' -s -k -$SIGNAL"
 }
 
 start() {
