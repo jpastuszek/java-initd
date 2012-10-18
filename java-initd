@@ -109,7 +109,6 @@ run_as() {
 		# We're already the $RUN_AS_USER so just exec the script.
 		/bin/bash -l -c "$COMMAND"
 	else
-		COMPLETE_COMMAND="(${NOHUP}$COMPLETE_COMMAND')$STDOUT_REDIR"
 		[[ "$USER" == "root" ]] || error "Cannot run command '$COMMAND' as user '$RUN_USER': need to be root" 99
 		su - $RUN_USER -c "$COMMAND"
 	fi
