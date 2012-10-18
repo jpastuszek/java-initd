@@ -127,7 +127,7 @@ daemonize() {
 }
 
 pids() {
-	run_as "$RUN_USER" "fuser '$PID_FILE' 2>/dev/null | sed 's, *,,'"
+	run_as "$RUN_USER" "fuser '$PID_FILE' 2>/dev/null | sed -r -e 's,^ +,,' -e 's, +, ,g'"
 }
 
 pid() {
