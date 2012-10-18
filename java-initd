@@ -122,7 +122,8 @@ daemonize() {
 	local PID_FILE="$4"
 
 	# Here we make new process with new session (setsid) and run it with closed STDIN and this init script lock file fd
-	run_as "$RUN_USER" "setsid bash -c '( $COMMAND ) 0<&- 200<&- 1>>\"$LOG_FILE\" 2>&1 & eval \"echo \$! > '$PID_FILE'\"'"
+	# also we make sure that the command stdout is line buffered so we see messages in the log as they are printed
+	run_as "$RUN_USER" "setsid bash -c '( stdbuf -oL $COMMAND ) 0<&- 200<&- 1>>\"$LOG_FILE\" 2>&1 & eval \"echo \$! > '$PID_FILE'\"'"
 }
 
 pids() {
