@@ -104,7 +104,6 @@ release_pid_lock() {
 ## Run command as given user
 # If command is not specified than bash script is read from STDIN
 # We run in login shell so that the env is the same as with interactive shell
-# Also we will set cap_net_bind_service if running as root so the process can use ports <1024
 run_as() {
 	local RUN_USER="$1"
 	local COMMAND="${2:-bash -l -s}"
@@ -114,7 +113,6 @@ run_as() {
 		bash -l -c "$COMMAND"
 	else
 		[[ "$USER" == "root" ]] || error "Cannot run command '$COMMAND' as user '$RUN_USER': need to be root" 99
-		#capsh --caps="cap_net_bind_service=+epi" -- -c "su - $RUN_USER -c \"$COMMAND\""
 		su - $RUN_USER -c "$COMMAND"
 	fi
 }

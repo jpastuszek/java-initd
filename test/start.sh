@@ -10,6 +10,7 @@ id
 which capsh
 capsh --print
 ./bind
+echo 'after bind'
 sleep 10
 echo "done"
 
