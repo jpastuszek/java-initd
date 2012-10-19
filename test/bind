@@ -1,0 +1,8 @@
+#!/usr/bin/env ruby
+
+require 'socket'
+
+# use Addrinfo
+socket = Socket.new(:INET, :STREAM, 0)
+socket.bind(Addrinfo.tcp("127.0.0.1", 222))
+puts "it works"

@@ -101,15 +101,20 @@ release_pid_lock() {
 	exec 201<&-
 }
 
+## Run command as given user
+# If command is not specified than bash script is read from STDIN
+# We run in login shell so that the env is the same as with interactive shell
+# Also we will set cap_net_bind_service if running as root so the process can use ports <1024
 run_as() {
 	local RUN_USER="$1"
-	local COMMAND="$2"
+	local COMMAND="${2:-bash -l -s}"
 
 	if [[ "$USER" == "$RUN_USER" || -z "$RUN_USER" ]]; then
 		# We're already the $RUN_AS_USER so just exec the script.
-		/bin/bash -l -c "$COMMAND"
+		bash -l -c "$COMMAND"
 	else
 		[[ "$USER" == "root" ]] || error "Cannot run command '$COMMAND' as user '$RUN_USER': need to be root" 99
+		#capsh --caps="cap_net_bind_service=+epi" -- -c "su - $RUN_USER -c \"$COMMAND\""
 		su - $RUN_USER -c "$COMMAND"
 	fi
 }
@@ -122,7 +127,13 @@ daemonize() {
 
 	# Here we make new process with new session (setsid) and run it with closed STDIN and this init script lock file fd
 	# also we make sure that the command stdout is line buffered so we see messages in the log as they are printed
-	run_as "$RUN_USER" "setsid bash -c '( stdbuf -oL $COMMAND ) 0<&- 200<&- 1>>\"$LOG_FILE\" 2>&1 & eval \"echo \$! > '$PID_FILE'\"'"
+	run_as "$RUN_USER" <<EOF1
+setsid bash -s <<EOF2
+	cd "$WORKING_DIRECTORY"
+	( stdbuf -oL $COMMAND ) 0<&- 200<&- 1>>'$LOG_FILE' 2>&1 &
+	echo \\\$! >'$PID_FILE'
+EOF2
+EOF1
 }
 
 pids() {
@@ -139,8 +150,6 @@ pids_send_signal() {
 }
 
 start() {
-	cd "$WORKING_DIRECTORY"
-
 	# Note that the fd 201 of the pid file lock will be inherited by the daemon
 	aquire_pid_lock || ok "$APPLICATION_NAME already running (PIDs: `pids`)"
 	daemonize "$RUN_USER" "$START_COMMAND" "$LOG_FILE" "$PID_FILE"

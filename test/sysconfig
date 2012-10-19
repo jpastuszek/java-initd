@@ -1,7 +1,7 @@
-WORKING_DIRECTORY="/tmp"
+WORKING_DIRECTORY="`pwd`/test"
 PID_FILE="/tmp/test.pid"
 STOP_COMMAND="kill %PID"
-START_COMMAND="`pwd`/test/start.sh"
+START_COMMAND="./start.sh"
 RUN_USER="kazuya"
 LOG_FILE="/tmp/test.log"
 STOP_WAIT=2
