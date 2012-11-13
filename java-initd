@@ -204,7 +204,7 @@ stop() {
 export JAVA_HOME
 
 # name of this script (make sure we remove S95 and K05 from the name when it is run at startup)
-INITD_NAME="`basename $0 | tr ' ' '_' | sed 's/^(S|K)[0-9][0-9]//'`"
+INITD_NAME="`basename $0 | tr ' ' '_' | sed -r 's/^(S|K)[0-9][0-9]//'`"
 
 # the name of managed application
 APPLICATION_NAME=${APPLICATION_NAME:-$INITD_NAME}
