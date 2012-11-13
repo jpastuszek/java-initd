@@ -148,12 +148,14 @@ pids_send_signal() {
 }
 
 start() {
+	echo -n "Starting $APPLICATION_NAME: "
+
 	# Note that the fd 201 of the pid file lock will be inherited by the daemon
-	aquire_pid_lock || ok "$APPLICATION_NAME already running (PIDs: `pids`)"
+	aquire_pid_lock || ok "already running (PIDs: `pids`)"
 	daemonize "$RUN_USER" "$START_COMMAND" "$LOG_FILE" "$PID_FILE"
 	release_pid_lock
 
-	ok "$APPLICATION_NAME running (PIDs: `pids`)"
+	ok "running (PIDs: `pids`)"
 }
 
 wait_while_pids() {
@@ -173,8 +175,8 @@ wait_pid_lock() {
 }
 
 stop() {
-	[[ `pids` ]] || ok "$APPLICATION_NAME already stopped"
-	echo -n "Stopping $APPLICATION_NAME ."
+	echo -n "Stopping $APPLICATION_NAME: "
+	[[ `pids` ]] || ok "already stopped"
 
 	if [[ "$STOP_COMMAND" ]]; then
 		cd "$WORKING_DIRECTORY"
