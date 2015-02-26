@@ -72,7 +72,7 @@ clean_lock() {
 
 lock_initd() {
 	[[ -f "$INITD_LOCK" ]] || touch "$INITD_LOCK" || error "Cannot touch init script lock file '$INITD_LOCK'" 2
-	exec 200>>"$INITD_LOCK"
+	exec 200<"$INITD_LOCK"
 	flock -n 200
 }
 
