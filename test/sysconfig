@@ -1,10 +1,10 @@
 WORKING_DIRECTORY="`pwd`/test"
 PID_FILE="/tmp/test.pid"
-STOP_COMMAND="kill %PID"
+STOP_COMMAND="kill %PID" # this may leave childeren running (zombie)
 START_COMMAND="./start.sh"
-RUN_USER="kazuya"
+RUN_USER="jpastuszek"
 LOG_FILE="/tmp/test.log"
-STOP_WAIT=2
+STOP_WAIT=4
 ALLOW_KILL=true
 APPLICATION_NAME="hello world"
 
