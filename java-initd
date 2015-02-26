@@ -52,6 +52,9 @@ ok() {
 	else
 		echo "$1 [  OK  ]"
 	fi
+	CALLBACK=$ON_OK
+	unset ON_OK
+	$CALLBACK
 	exit $2
 }
 
@@ -64,6 +67,10 @@ fail() {
 		echo "$1 [  FAILED  ]"
 	fi
 	exit $2
+}
+
+on_ok() {
+	ON_OK=$1
 }
 
 clean_lock() {
@@ -79,7 +86,7 @@ lock_initd() {
 need_initd_lock() {
 	lock_initd || error "Script already running" 2
 	# clean_lock on termination
-	trap 'clean_lock' 0 1 2 3 6 9 14 15
+	trap 'clean_lock' EXIT SIGHUP SIGINT SIGQUIT SIGABRT SIGKILL SIGALRM SIGTERM
 }
 
 close_fds() {
@@ -245,7 +252,7 @@ case "$1" in
 	;;
 	restart)
 		need_initd_lock
-		trap 'start' EXIT
+		on_ok 'start'
 		stop
 	;;
 	status)
