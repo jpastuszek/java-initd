@@ -1,0 +1,270 @@
+#!/bin/bash
+#
+# mydaemon: Starts mydaemon
+#
+# chkconfig: - 99 01
+# description:  Generic starutp script
+#
+### BEGIN INIT INFO
+# Provides: mydaemon
+# Default-Stop: 0 1 6
+# Short-Description: Starts mydaemon application
+# Description:  Manages mydaemon application startup daemonization and safe shutdown
+### END INIT INFO
+
+###
+#
+# Spawns process in own session as specified user (daemonize).
+#
+# Stopping will be done in up to three fazes:
+#  1. Use STOP_COMMAND if defined than wait for STOP_WAIT until process exits
+#  2. Send SIGTERM and wait for STOP_WAIT until process exits
+#  3. Send SIGKILL if allowed by ALLOW_KILL and wait for STOP_WAIT until process exits
+#
+# Note that stop process will send signals to all processes that start process has spawned.
+# Note that locking mechanism is based on file locking (flock).
+#
+# Following variables needs to be defined in sysconfig:
+#
+# APPLICATION_NAME      name of the application for display purposes (optional)
+# WORKING_DIRECTORY     directory to change into before executing start/stop
+# PID_FILE              file where pid will be stored
+# LOG_FILE              file to redirect process output to
+# RUN_USER              user that will be used to run start/stop/status commands
+# START_COMMAND         command used to start the process
+# STOP_COMMAND          command used to stop the process; %PID substring will be replaced with process PID (optional)
+# STOP_WAIT             time in seconds to wait for stop command effect
+# ALLOW_KILL            if true SIGKILL may be sent to process if it refuses to stop
+#
+
+## Functions
+
+error() {
+	echo "$1!" 1>&2
+	exit $2
+}
+
+ok() {
+	if [ -r /etc/rc.d/init.d/functions ]; then
+		echo -n "$1"
+		echo_success
+		echo
+	else
+		echo "$1 [  OK  ]"
+	fi
+	CALLBACK=$ON_OK
+	unset ON_OK
+	$CALLBACK
+	exit $2
+}
+
+fail() {
+	if [ -r /etc/rc.d/init.d/functions ]; then
+		echo -n "$1"
+		echo_failure
+		echo
+	else
+		echo "$1 [  FAILED  ]"
+	fi
+	exit $2
+}
+
+on_ok() {
+	ON_OK=$1
+}
+
+clean_lock() {
+	[[ -w "$INITD_LOCK" ]] && rm -f "$INITD_LOCK"
+}
+
+lock_initd() {
+	[[ -f "$INITD_LOCK" ]] || touch "$INITD_LOCK" || error "Cannot touch init script lock file '$INITD_LOCK'" 2
+	exec 200<"$INITD_LOCK"
+	flock -n 200
+}
+
+need_initd_lock() {
+	lock_initd || error "Script already running" 2
+	# clean_lock on termination
+	trap 'clean_lock' EXIT SIGHUP SIGINT SIGQUIT SIGABRT SIGKILL SIGALRM SIGTERM
+}
+
+close_fds() {
+	# We close all inherited FDs
+	# This is important so we don't hold open file or sockets from calling process
+	for I in {3..255}; do eval "exec $I>&-"; done
+}
+
+aquire_pid_lock() {
+	[[ -f "$PID_FILE" ]] || run_as "$RUN_USER" "touch '$PID_FILE'" || error "Cannot touch PID file '$PID_FILE'" 2
+	exec 201>>"$PID_FILE"
+	flock -n 201
+	RET=$?
+	[[ $RET > 0 ]] && release_pid_lock
+	return $RET
+}
+
+release_pid_lock() {
+	exec 201<&-
+}
+
+## Run command as given user
+# If command is not specified than bash script is read from STDIN
+# We run in login shell so that the env is the same as with interactive shell
+run_as() {
+	local RUN_USER="$1"
+	local COMMAND="${2:-bash -l -s}"
+
+	if [[ "$USER" == "$RUN_USER" || -z "$RUN_USER" ]]; then
+		# We're already the $RUN_AS_USER so just exec the script.
+		bash -l -c "$COMMAND"
+	else
+		[[ "$USER" == "root" ]] || error "Cannot run command '$COMMAND' as user '$RUN_USER': need to be root" 99
+		su - $RUN_USER -c "$COMMAND"
+	fi
+}
+
+daemonize() {
+	local RUN_USER="$1"
+	local COMMAND="$2"
+	local LOG_FILE="$3"
+	local PID_FILE="$4"
+
+	# Here we make new process with new session (setsid) and run it with closed STDIN and this init script lock file fd
+	# also we make sure that the command stdout is line buffered so we see messages in the log as they are printed
+	run_as "$RUN_USER" <<EOF1
+setsid bash -s <<EOF2
+	cd "$WORKING_DIRECTORY"
+	( stdbuf -oL $COMMAND ) 0<&- 200<&- 1>>'$LOG_FILE' 2>&1 &
+	echo \\\$! >'$PID_FILE'
+EOF2
+EOF1
+}
+
+pids() {
+	run_as "$RUN_USER" "fuser '$PID_FILE' 2>/dev/null | sed -r -e 's,^ +,,' -e 's, +, ,g'"
+}
+
+pid() {
+	pids | cut -d ' ' -f 1
+}
+
+pids_send_signal() {
+	local SIGNAL="$1"
+	run_as "$RUN_USER" "fuser '$PID_FILE' -s -k -$SIGNAL 2>/dev/null"
+}
+
+start() {
+	echo -n "Starting $APPLICATION_NAME: "
+
+	# Note that the fd 201 of the pid file lock will be inherited by the daemon
+	aquire_pid_lock || ok "already running (PIDs: `pids`)"
+	daemonize "$RUN_USER" "$START_COMMAND" "$LOG_FILE" "$PID_FILE"
+	release_pid_lock
+
+	ok "running (PIDs: `pids`)"
+}
+
+wait_while_pids() {
+	local SECONDS="$1"
+	while [[ `pids` && $(( SECONDS-- )) != 0 ]]; do
+		sleep 1
+		echo -n '.'
+	done
+	[[ $SECONDS == -1 ]] && return 1
+	return 0
+}
+
+wait_pid_lock() {
+	local SECONDS="$1"
+	[[ -f "$PID_FILE" ]] || return 0
+	flock -w "$SECONDS" "$PID_FILE" true
+}
+
+stop() {
+	echo -n "Stopping $APPLICATION_NAME: "
+	[[ `pids` ]] || ok "already stopped"
+
+	if [[ "$STOP_COMMAND" ]]; then
+		cd "$WORKING_DIRECTORY"
+		run_as "$RUN_USER" "${STOP_COMMAND//\%PID/`pid`}"
+		wait_while_pids "$STOP_WAIT" && wait_pid_lock 2 && ok " stopped"
+	fi
+
+	pids_send_signal TERM
+	wait_while_pids "$STOP_WAIT" && wait_pid_lock 2 && ok " terminated"
+
+	if $ALLOW_KILL; then
+		pids_send_signal KILL
+		wait_while_pids "$STOP_WAIT" && wait_pid_lock 2 && ok " killed"
+	fi
+
+	fail " will not stop!" 5
+}
+
+# source RedHat startup functions
+[[ -r "/etc/rc.d/init.d/functions" ]] && . "/etc/rc.d/init.d/functions"
+
+# name of this script (make sure we remove S95 and K05 from the name when it is run at startup)
+INITD_NAME="`basename $0 | tr ' ' '_' | sed -r 's/^(S|K)[0-9][0-9]//'`"
+
+# the name of managed application
+APPLICATION_NAME=${APPLICATION_NAME:-$INITD_NAME}
+
+# lock file for this script
+INITD_LOCK="/tmp/initd-$INITD_NAME.LOCK"
+
+# source test sysconfig if we are testing
+[[ -r "test/sysconfig" ]] && . "test/sysconfig"
+
+# source sysconfig variables
+[[ -r "/etc/sysconfig/$INITD_NAME" ]] && . "/etc/sysconfig/$INITD_NAME"
+
+# USER variable not always set
+USER=${USER:-`id | sed 's/.*(\(.*\)).*gid.*/\1/'`}
+
+# additional usage for help output
+USAGE=""
+
+WORKING_DIRECTORY=${WORKING_DIRECTORY:-/var/lib/$INITD_NAME}
+LOG_FILE=${LOG_FILE:-/var/log/$INITD_NAME/out.log}
+STOP_WAIT=${STOP_WAIT:-4}
+ALLOW_KILL=${ALLOW_KILL:-true}
+PID_FILE=${PID_FILE:-/var/run/$INITD_NAME/pid}
+
+## Verify variables
+[[ -d "$WORKING_DIRECTORY" ]] || error "Working directory '$WORKING_DIRECTORY' not a directory" 2
+[[ "$START_COMMAND" ]] || error "Start command not defined" 2
+[[ "$STOP_WAIT" ]] || error "Stop wait time not defined" 2
+
+## Execute operation
+close_fds
+
+case "$1" in
+	start)
+		need_initd_lock
+		start
+	;;
+	stop)
+		need_initd_lock
+		stop
+	;;
+	restart)
+		need_initd_lock
+		on_ok 'start'
+		stop
+	;;
+	status)
+		PIDS=`pids`
+		if [[ "$PIDS" ]]; then
+			echo "$APPLICATION_NAME is running (PIDs: $PIDS)"
+			exit 0
+		else
+			echo "$APPLICATION_NAME is stopped"
+			exit 1
+		fi
+	;;
+	*)
+		echo "Usage: $INITD_NAME (start|stop|restart|status$USAGE)"
+	;;
+esac
